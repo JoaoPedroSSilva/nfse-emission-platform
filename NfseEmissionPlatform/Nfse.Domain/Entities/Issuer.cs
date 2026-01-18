@@ -6,7 +6,7 @@ namespace Nfse.Domain.Entities
 {
     public class Issuer : Entity
     {
-        public Guid TentantId { get; private set; }
+        public Guid TenantId { get; private set; }
 
         public Cnpj Cnpj { get; private set; }
 
@@ -30,7 +30,7 @@ namespace Nfse.Domain.Entities
             if (string.IsNullOrWhiteSpace(legalName))
                 throw new ArgumentException("Legal name is required.");
 
-            TentantId = tenantId;
+            TenantId = tenantId;
             Cnpj = cnpj;
             LegalName = legalName;
             TradeName = tradeName;

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Nfse.Web.Components;
 using Nfse.Web.Components.Account;
 using Nfse.Web.Data;
+using Nfse.Infrastructure;
 
 namespace Nfse.Web
 {
@@ -40,6 +41,8 @@ namespace Nfse.Web
                 .AddDefaultTokenProviders();
 
             builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+            builder.Services.AddInfrastructure(builder.Configuration);
 
             var app = builder.Build();
 
