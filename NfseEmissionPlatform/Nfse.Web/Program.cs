@@ -5,6 +5,7 @@ using Nfse.Web.Components;
 using Nfse.Web.Components.Account;
 using Nfse.Web.Data;
 using Nfse.Infrastructure;
+using Nfse.Application.Commands;
 
 namespace Nfse.Web
 {
@@ -43,6 +44,8 @@ namespace Nfse.Web
             builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
             builder.Services.AddInfrastructure(builder.Configuration);
+            builder.Services.AddScoped<CreateIssuerCommandHandler>();
+            builder.Services.AddScoped<CreateServiceTemplateCommandHandler>();
 
             var app = builder.Build();
 

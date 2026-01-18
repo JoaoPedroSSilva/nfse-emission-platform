@@ -1,0 +1,138 @@
+﻿@page "/issuers"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using Nfse.Infrastructure.Persistence
+@using Nfse.Application.Commands
+@using Nfse.Web.Helpers
+
+@inject AppDbContext Db
+@inject CreateIssuerCommandHandler CreateIssuer
+
+<h3>Issuers</h3>
+
+<div class="mb-3" style="max-width: 720px;">
+	<div class="mb-2">
+		<label class="form-label">CNPJ</label>
+		<input class="form-control" @bind="Form.Cnpj" />
+	</div>
+
+	<div class="mb-2">
+		<label class="form-label">Legal name</label>
+		<input class="form-control" @bind="Form.LegalName" />
+	</div>
+
+	<div class="mb-2">
+		<label class="form-label">Trade name</label><br />
+		<input class="form-control" @bind="Form.TradeName" />
+	</div>
+
+	<button class="btn btn-primary" @onclick="Create" disabled="@IsSaving">
+		@(IsSaving ? "Saving..." : "Create issuer")
+	</button>
+
+	@if (!string.IsNullOrWhiteSpace(Error))
+	{
+		<div class="alert alert-danger mt-3" role="alert">
+			@Error	
+		</div>
+	}
+</div>
+
+<hr />
+
+@if (IssuersList is null)
+{
+	<p>Loading...</p>
+}
+else if (IssuersList.Count == 0)
+{
+	<p>No issuers yet.</p>
+}
+else
+{
+	<table class="table table-sm">
+		<thead>
+			<tr>
+				<th>Legal name</th>
+				<th>CNPJ</th>
+				<th>Active</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var issuer in IssuersList)
+			{
+				<tr>
+					<td>@issuer.LegalName</td>
+					<td>@CnpjFormatter.Format(issuer.Cnpj.Value)</td>
+					<td>@(issuer.IsActive ? "Yes" : "No")</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+@code {
+	private static readonly Guid DemoTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111"); // temporary for MVP
+
+	private IssuerFormModel Form = new();
+	private List<Nfse.Domain.Entities.Issuer>? IssuersList;
+
+	private bool IsSaving = false;
+	private string Error = string.Empty;
+	private int ClickCount = 0;
+
+	protected override async Task OnInitializedAsync()
+	{
+		await Reload();
+	}
+
+	private async Task Create()
+	{
+		Error = string.Empty;
+
+		if (string.IsNullOrWhiteSpace(Form.Cnpj) || string.IsNullOrWhiteSpace(Form.LegalName))
+		{
+			Error = "CNPJ and Legal name are required.";
+			return;
+		}
+
+		IsSaving = true;
+
+		try
+		{
+			CreateIssuerCommand command = new CreateIssuerCommand(
+				TenantId: DemoTenantId,
+				Cnpj: Form.Cnpj,
+				LegalName: Form.LegalName,
+				TradeName: Form.TradeName);
+
+			await CreateIssuer.Handle(command, CancellationToken.None);
+
+			Form = new IssuerFormModel();
+			await Reload();
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
+		}
+		finally
+		{
+			IsSaving = false;
+		}
+	}
+
+	private async Task Reload()
+	{
+		IssuersList = await Db.Issuers
+			.AsNoTracking()
+			.OrderBy(x => x.LegalName)
+			.ToListAsync();
+	}
+
+	private sealed class IssuerFormModel
+	{
+		public string Cnpj { get; set; } = "";
+		public string LegalName { get; set; } = "";
+		public string TradeName { get; set; } = "";
+	}
+}
