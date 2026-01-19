@@ -1,0 +1,240 @@
+﻿@page "/service-templates"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using Nfse.Application.Commands
+@using Nfse.Infrastructure.Persistence
+@using Nfse.Web.Helpers
+
+@inject AppDbContext Db
+@inject CreateServiceTemplateCommandHandler CreateServiceTemplate
+
+<h3>ServiceTemplates</h3>
+
+<div class="mb-3" style="max-width: 920px;">
+
+	<div class="mb-3">
+		<label class="form-label">Issuer</label>
+		<select class="form-select" @bind="SelectedIssuerId" @bind:event="onchange">
+			<option value="">-- select an issuer --</option>
+			@foreach (var issuer in Issuers)
+			{
+				<option value="@issuer.Id">
+					@issuer.LegalName (@CnpjFormatter.Format(issuer.Cnpj.Value))
+				</option>
+			}
+		</select>
+	</div>
+
+	@if (SelectedIssuerId is null)
+	{
+		<p>Select an issuer to manage service templates.</p>
+	}
+	else
+	{
+		<div class="card p-3 mb-3">
+			<h5 class="mb-3">Create service template</h5>
+
+			<div class="row g-2">
+				<div class="col-md-3">
+					<label class="form-label">National service code (6digits)</label>
+					<input class="form-control" @bind="Form.NationalServiceCode" placeholder="e.g. 170201" />
+				</div>
+
+				<div class="col-md-2">
+					<label class="form-label">LC 116 subitem (optional)</label>
+					<input class="form-control" @bind="Form.Lc116Subitem" placeholder="e. g. 17.02" />
+				</div>
+
+				<div class="col-md-5">
+					<label class="form-label">Description</label>
+					<input class="form-control" @bind="Form.Description" placeholder="Service Description" />
+				</div>
+
+				<div class="col-md-2">
+					<label class="form-label">Default tax rate (optional)</label>
+					<input class="form-control" @bind="Form.DefaultTaxRateText" placeholder="e.g. 2.00" />
+				</div>
+
+				<div class="col-md-3 mt-2">
+					<div class="form-check mt-4">
+						<input class="form-check-input" type="checkbox" id="issWithheld" @bind="Form.IsIssWithheld" />
+						<label class="form-check-label" for="issWithheld">
+							ISS withheld
+						</label>
+					</div>
+				</div>
+
+				<div class="col-md-9 mt-2">
+					<button class="btn btn-primary mt-3" @onclick="Create" disabled="@IsSaving">
+						@(IsSaving ? "Saving..." : "Create service template")
+					</button>
+				</div>
+			</div>
+
+			@if (!string.IsNullOrWhiteSpace(Error))
+			{
+				<div class="alert alert-danger mt-3" role="alert">@Error</div>
+			}
+		</div>
+
+		<h5>Existing templates</h5>
+
+		@if (Templates is null)
+		{
+			<p>Loading...</p>
+		}
+		else if (Templates.Count == 0)
+		{
+			<p>No service templates yet.</p>
+		}
+		else
+		{
+			<table class="table table-sm">
+				<thead>
+					<tr>
+						<th>Code</th>
+						<th>LC 116</th>
+						<th>Description</th>
+						<th>Tax rate</th>
+						<th>ISS withheld</th>
+						<th>Active</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var s in Templates)
+					{
+						<tr>
+							<td>@s.NationalServiceCode</td>
+							<td>@s.Lc116Subitem</td>
+							<td>@s.Description</td>
+							<td>@(s.DefaultTaxRate?.ToString("0.####") ?? "-")</td>
+							<td>@(s.IsIssWithheld ? "Yes" : "No")</td>
+							<td>@(s.IsActive ? "Yes" : "No")</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	}
+</div>
+
+
+@code {
+	private List<Nfse.Domain.Entities.Issuer> Issuers = new();
+	private Guid? _selectedIssuerId;
+	private Guid? SelectedIssuerId
+	{
+		get => _selectedIssuerId;
+		set
+		{
+			_selectedIssuerId = value;
+			_ = LoadTemplates();
+		}
+	}
+
+	private List<Nfse.Domain.Entities.ServiceTemplate>? Templates;
+
+	private ServiceTemplateFormModel Form = new();
+	private bool IsSaving = false;
+	private string Error = string.Empty;
+
+	protected override async Task OnInitializedAsync()
+	{
+		Issuers = await Db.Issuers
+			.AsNoTracking()
+			.OrderBy(x => x.LegalName)
+			.ToListAsync();
+	}
+
+	private async Task LoadTemplates()
+	{
+		Error = string.Empty;
+
+		if (SelectedIssuerId is null)
+		{
+			Templates = null;
+			return;
+		}
+
+		Templates = await Db.ServiceTemplates
+			.AsNoTracking()
+			.Where(x => x.IssuerId == SelectedIssuerId && x.IsActive)
+			.OrderBy(x => x.NationalServiceCode)
+			.ToListAsync();
+	}
+
+	private async Task Create()
+	{
+		Error = string.Empty;
+
+		if (SelectedIssuerId is null)
+		{
+			Error = "Please select an issuer.";
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(Form.NationalServiceCode) || Form.NationalServiceCode.Trim().Length != 6)
+		{
+			Error = "National service code must have 6 digits (e.g. 170201).";
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(Form.Description))
+		{
+			Error = "Description is required.";
+			return;
+		}
+
+		decimal? taxRate = null;
+		if (!string.IsNullOrWhiteSpace(Form.DefaultTaxRateText))
+		{
+			// Accept both "2.00" and "2,00" to make your life easier in PT-BR
+			string normalized = Form.DefaultTaxRateText.Trim().Replace(',', '.');
+
+			if (!decimal.TryParse(normalized, System.Globalization.NumberStyles.Number,
+			System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+			{
+				Error = "Invalid tax rate. Use something like 2.00";
+				return;
+			}
+
+			taxRate = parsed;
+		}
+
+		IsSaving = true;
+
+		try
+		{
+			var cmd = new CreateServiceTemplateCommand(
+				IssuerId: SelectedIssuerId.Value,
+				NationalServiceCode: Form.NationalServiceCode.Trim(),
+				Lc116Subitem: Form.Lc116Subitem?.Trim() ?? "",
+				Description: Form.Description.Trim(),
+				DefaultTaxRate: taxRate,
+				IsIssWithheld: Form.IsIssWithheld);
+
+			await CreateServiceTemplate.Handle(cmd, CancellationToken.None);
+
+			Form = new ServiceTemplateFormModel();
+			await LoadTemplates();
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
+		}
+		finally
+		{
+			IsSaving = false;
+		}
+	}
+
+	private sealed class ServiceTemplateFormModel
+	{
+		public string NationalServiceCode { get; set; } = "";
+		public string? Lc116Subitem { get; set; } = "";
+		public string Description { get; set; } = "";
+		public string? DefaultTaxRateText { get; set; } = "";
+		public bool IsIssWithheld { get; set; } = false;
+	}
+}
