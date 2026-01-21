@@ -20,7 +20,7 @@
 			@foreach (var issuer in Issuers)
 			{
 				<option value="@issuer.Id">
-					@issuer.LegalName (@CnpjFormatter.Format(issuer.Cnpj.Value))
+					@issuer.LegalName (@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value))
 				</option>
 			}
 		</select>

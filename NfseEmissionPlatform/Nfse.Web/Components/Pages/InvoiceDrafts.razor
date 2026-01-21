@@ -1,0 +1,112 @@
+﻿@page "/invoice-drafts"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using Nfse.Infrastructure.Persistence
+@using Nfse.Web.Helpers
+
+@inject AppDbContext Db
+
+<h3>InvoiceDrafts</h3>
+
+<div class="mb-3" style="max-width: 920px;">
+
+	<div class="mb-3">
+		<label class="form-label">Issuer</label>
+		<select class="form-select" @bind="SelectedIssuerId">
+			<option value="">-- select an issuer --</option>
+			@foreach (var issuer in Issuers)
+			{
+				<option value="@issuer.Id">
+					@issuer.LegalName (@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value))
+				</option>
+			}
+		</select>
+	</div>
+
+	@if (SelectedIssuerId is null)
+	{
+		<p>Select an issuer to view drafts.</p>
+	}
+	else if (Drafts is null)
+	{
+		<p>Loading...</p>
+	}
+	else if (Drafts.Count == 0)
+	{
+		<p>No drafts found.</p>
+	}
+	else
+	{
+		<table class="table table-sm">
+			<thead>
+				<tr>
+					<th>Created</th>
+					<th>Status</th>
+					<th>Recipient</th>
+					<th>Document</th>
+					<th>Amount</th>
+					<th>Tax rate</th>
+					<th>ISS withheld</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var d in Drafts)
+				{
+					<tr>
+						<td>@d.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+						<td>@d.Status</td>
+						<td>@d.RecipientName</td>
+						<td>@DocumentFormatter.FormatCpfOrCnpj(d.RecipientDocument)</td>
+						<td>@d.Amount.ToString("0.00")</td>
+						<td>@(d.TaxRate?.ToString("0.####") ?? "-")</td>
+						<td>@(d.IsIssWithheld ? "Yes" : "No")</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+</div>
+
+@code {
+	private List<Nfse.Domain.Entities.Issuer> Issuers = new();
+
+	private Guid? _selectedIssuerId;
+	private Guid? SelectedIssuerId
+	{
+		get => _selectedIssuerId;
+		set
+		{
+			_selectedIssuerId = value;
+			_ = LoadDrafts();
+		}
+	}
+
+	private List<Nfse.Domain.Entities.InvoiceDraft>? Drafts;
+
+	protected override async Task OnInitializedAsync()
+	{
+		Issuers = await Db.Issuers
+		.AsNoTracking()
+		.OrderBy(x => x.LegalName)
+		.ToListAsync();
+	}
+
+	private async Task LoadDrafts()
+	{
+		if (SelectedIssuerId is null)
+		{
+			Drafts = null;
+			return;
+		}
+
+		Drafts = await Db.InvoiceDrafts
+			.AsNoTracking()
+			.Where(x => x.IssuerId == SelectedIssuerId)
+			.OrderByDescending(x => x.CreatedAtUtc)
+			.Take(200)
+			.ToListAsync();
+
+		StateHasChanged();
+	}
+}

@@ -23,6 +23,7 @@ namespace Nfse.Web
             builder.Services.AddScoped<IdentityUserAccessor>();
             builder.Services.AddScoped<IdentityRedirectManager>();
             builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+            builder.Services.AddScoped<CreateInvoiceDraftCommandHandler>();
 
             builder.Services.AddAuthentication(options =>
                 {

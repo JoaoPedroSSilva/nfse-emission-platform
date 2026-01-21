@@ -63,7 +63,7 @@ else
 			{
 				<tr>
 					<td>@issuer.LegalName</td>
-					<td>@CnpjFormatter.Format(issuer.Cnpj.Value)</td>
+					<td>@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value)</td>
 					<td>@(issuer.IsActive ? "Yes" : "No")</td>
 				</tr>
 			}
