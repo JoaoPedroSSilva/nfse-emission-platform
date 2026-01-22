@@ -5,6 +5,7 @@
         Guid ServiceTemplateId,
         string RecipientName,
         string RecipientDocument,
+        string ServiceDescription,
         decimal Amount,
         decimal? TaxRate,
         bool IsIssWithheld);

@@ -12,6 +12,7 @@ namespace Nfse.Domain.Entities
         public string RecipientDocument { get; private set; } // CPF/CNPJ digits only
 
         // Values
+        public string ServiceDescription { get; private set; }
         public decimal Amount { get; private set; }
         public decimal? TaxRate { get; private set; }
         public bool IsIssWithheld { get; private set; }
@@ -30,6 +31,7 @@ namespace Nfse.Domain.Entities
             Guid serviceTemplateId,
             string recipientName,
             string recipientDocument,
+            string serviceDescription,
             decimal amount,
             decimal? taxRate,
             bool isIssWithheld)
@@ -38,6 +40,7 @@ namespace Nfse.Domain.Entities
             if (serviceTemplateId == Guid.Empty) throw new ArgumentException("ServiceTemplateId is required.");
             if (string.IsNullOrWhiteSpace(recipientName)) throw new ArgumentException("Recipient name is required.");
             if (string.IsNullOrWhiteSpace(recipientDocument)) throw new ArgumentException("Recipient document is required.");
+            if (string.IsNullOrWhiteSpace(serviceDescription)) throw new ArgumentException("Service description is required.");
             if (amount <= 0) throw new ArgumentException("Amount must be greater than zero.");
 
             IssuerId = issuerId;
@@ -45,6 +48,7 @@ namespace Nfse.Domain.Entities
 
             RecipientName = recipientName.Trim();
             RecipientDocument = recipientDocument.Trim();
+            ServiceDescription = serviceDescription.Trim();
 
             Amount = amount;
             TaxRate = taxRate;

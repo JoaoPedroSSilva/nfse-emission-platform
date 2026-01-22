@@ -19,6 +19,7 @@ namespace Nfse.Application.Commands
                 command.ServiceTemplateId,
                 command.RecipientName,
                 command.RecipientDocument,
+                command.ServiceDescription,
                 command.Amount,
                 command.TaxRate,
                 command.IsIssWithheld);

@@ -62,6 +62,7 @@ namespace Nfse.Infrastructure.Persistence
 
                 b.Property(x => x.RecipientName).HasMaxLength(200).IsRequired();
                 b.Property(x => x.RecipientDocument).HasMaxLength(14).IsRequired();
+                b.Property(x => x.ServiceDescription).HasMaxLength(2000).IsRequired();
 
                 b.Property(x => x.Amount).HasPrecision(18, 2).IsRequired();
                 b.Property(x => x.TaxRate).HasPrecision(9, 4);

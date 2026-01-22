@@ -1,0 +1,396 @@
+﻿@page "/import-invoices"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using ClosedXML.Excel
+@using Microsoft.EntityFrameworkCore
+@using Nfse.Infrastructure.Persistence
+@using Nfse.Web.Helpers
+
+@inject AppDbContext Db
+
+<h3>ImportInvoices</h3>
+
+<div class="mb-3" style="max-width: 980px;">
+
+	<div class="mb-3">
+		<label class="form-label">Issuer</label>
+		<select class="form-select" @bind="SelectedIssuerId">
+			<option value="">-- select an issuer --</option>
+			@foreach (var issuer in Issuers)
+			{
+				<option value="@issuer.Id">
+					@issuer.LegalName (@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value))
+				</option>
+			}
+		</select>
+	</div>
+
+	<div class="mb-3">
+		<label class="form-label">Excel file (.xlsx)</label>
+		<InputFile OnChange="OnFileSelected" accept=".xlsx" />
+	</div>
+
+	@if (!string.IsNullOrWhiteSpace(Error))
+	{
+		<div class="alert alert-danger" role="alert">@Error</div>
+	}
+
+	@if (PreviewRows is not null)
+	{
+		<div class="d-flex gap-2 mb-2">
+			<button class="btn btn-primary" @onclick="Import" disabled="@IsImporting">
+				@(IsImporting ? "Importing..." : "Import")
+			</button>
+			<button class="btn btn-outline-secondary" @onclick="Clear" disabled="@IsImporting">
+				Clear
+			</button>
+		</div>
+
+		<p>
+			Rows: <b>@PreviewRows.Count</b> |
+			Valid: <b>@PreviewRows.Count(x => x.IsValid)</b> |
+			Invalid: <b>@PreviewRows.Count(x => !x.IsValid)</b> |
+		</p>
+
+		<table class="table table-sm">
+			<thead>
+				<tr>
+					<th>#</th>
+					<th>Recipient</th>
+					<th>Document</th>
+					<th>Service code</th>
+					<th>Description</th>
+					<th>Amount</th>
+					<th>TaxRate</th>
+					<th>ISS withheld</th>
+					<th>ServiceTemplate</th>
+					<th>Errors</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var r in PreviewRows)
+				{
+					<tr>
+						<td>@r.RowNumber</td>
+						<td>@r.RecipientName</td>
+						<td>@DocumentFormatter.FormatCpfOrCnpj(r.RecipientDocument)</td>
+						<td>@r.NationalServiceCode</td>
+						<td>@r.ServiceDescription</td>
+						<td>@(r.Amount?.ToString("0.00") ?? "-")</td>
+						<td>@(r.TaxRate?.ToString("0.####") ?? "-")</td>
+						<td>@(r.IsIssWithheld?.ToString() ?? "-")</td>
+						<td>@(r.ServiceTemplateId?.ToString() ?? "-")</td>
+						<td style="color:@(r.IsValid ? "inherit" : "red")">@r.Error</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+</div>
+
+@code {
+	private List<Nfse.Domain.Entities.Issuer> Issuers = new();
+
+	private Guid? SelectedIssuerId;
+	private IBrowserFile? SelectedFile;
+
+	private List<ImportRowPreview>? PreviewRows;
+
+	private bool IsImporting = false;
+	private string Error = string.Empty;
+
+	// Load issuers for dropdown
+	protected override async Task OnInitializedAsync()
+	{
+		Issuers = await Db.Issuers
+			.AsNoTracking()
+			.OrderBy(x => x.LegalName)
+			.ToListAsync();
+	}
+
+	private async Task OnFileSelected(InputFileChangeEventArgs e)
+	{
+		Error = string.Empty;
+		PreviewRows = null;
+
+		if (SelectedIssuerId is null)
+		{
+			Error = "Please select an issuer first.";
+			return;
+		}
+
+		SelectedFile = e.File;
+		if (SelectedFile is null)
+			return;
+
+		if (!SelectedFile.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+		{
+			Error = "Please upload a .xlsx file.";
+			return;
+		}
+
+		// Build ServiceTemplate lookup by code for this issuer
+		var templates = await Db.ServiceTemplates
+			.AsNoTracking()
+			.Where(x => x.IssuerId == SelectedIssuerId && x.IsActive)
+			.ToListAsync();
+
+		var templateByCode = templates
+			.GroupBy(t => t.NationalServiceCode)
+			.ToDictionary(g => g.Key, g => g.First());
+
+		// Read file into memory
+		await using var stream = SelectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB
+		using var ms = new MemoryStream();
+		await stream.CopyToAsync(ms);
+		ms.Position = 0;
+
+		PreviewRows = ParseExcel(ms, templateByCode);
+	}
+
+	private static List<ImportRowPreview> ParseExcel(
+		Stream excelStream,
+		Dictionary<string, Nfse.Domain.Entities.ServiceTemplate> templateByCode)
+	{
+		using var workbook = new XLWorkbook(excelStream);
+		var ws = workbook.Worksheets.First();
+
+		// Header mapping
+		var headerRow = ws.FirstRowUsed();
+		var headers = headerRow.CellsUsed()
+			.ToDictionary(
+				c => c.GetString().Trim(),
+				c => c.Address.ColumnNumber,
+				StringComparer.OrdinalIgnoreCase);
+
+		string[] required =
+		{
+			"RecipientDocument",
+			"RecipientName",
+			"NationalServiceCode",
+			"ServiceDescription",
+			"Amount"
+	};
+
+		foreach (var req in required)
+		{
+			if (!headers.ContainsKey(req))
+				throw new InvalidOperationException($"Missing required column: {req}");
+		}
+
+		int? colTaxRate = headers.TryGetValue("TaxRate", out var tr) ? tr : null;
+		int? colIssWithheld = headers.TryGetValue("IsIssWithheld", out var iw) ? iw : null;
+
+		var rows = new List<ImportRowPreview>();
+
+		// Data starts on nest row
+		var dataRows = ws.RowsUsed().Skip(1);
+
+		foreach (var row in dataRows)
+		{
+			var rowNum = row.RowNumber();
+			var r = new ImportRowPreview { RowNumber = rowNum };
+
+			r.RecipientDocument = row.Cell(headers["RecipientDocument"]).GetString().Trim();
+			r.RecipientName = row.Cell(headers["RecipientName"]).GetString().Trim();
+			r.NationalServiceCode = row.Cell(headers["NationalServiceCode"]).GetString().Trim();
+			r.ServiceDescription = row.Cell(headers["ServiceDescription"]).GetString().Trim();
+
+			var amountText = row.Cell(headers["Amount"]).GetString().Trim();
+			r.Amount = TryParseDecimal(amountText);
+
+			r.TaxRate = colTaxRate is null ? null : TryParseDecimal(row.Cell(colTaxRate.Value).GetString().Trim());
+			r.IsIssWithheld = colIssWithheld is null ? null : TryParseBool(row.Cell(colIssWithheld.Value).GetString().Trim());
+
+			// Normalize doc digits only
+			r.RecipientDocument = new string(r.RecipientDocument.Where(char.IsDigit).ToArray());
+
+			// Validate
+			var errors = new List<string>();
+
+			if (string.IsNullOrWhiteSpace(r.RecipientName))
+				errors.Add("RecipientName is required.");
+
+			if (r.RecipientDocument.Length is not (11 or 14))
+				errors.Add("RecipientDocument must have 11 (CPF) or 14 (CNPJ) digits.");
+
+			if (string.IsNullOrWhiteSpace(r.NationalServiceCode) || r.NationalServiceCode.Length != 6)
+				errors.Add("NationalServiceCode must have 6 digits.");
+
+			if (string.IsNullOrWhiteSpace(r.ServiceDescription))
+				errors.Add("ServiceDescription is required.");
+
+			if (r.Amount is null || r.Amount <= 0)
+				errors.Add("Amount must be greater than zero.");
+
+			if (!templateByCode.TryGetValue(r.NationalServiceCode, out var template))
+			{
+				errors.Add($"ServiceTemplate not found for code {r.NationalServiceCode}.");
+			}
+			else
+			{
+				r.ServiceTemplateId = template.Id;
+
+				// Apply defatults if not provided
+				r.TaxRate ??= template.DefaultTaxRate;
+				r.IsIssWithheld ??= template.IsIssWithheld;
+			}
+
+			r.Error = string.Join(" ", errors);
+			r.IsValid = errors.Count == 0;
+
+			// Ignore fully empty rows
+			if (string.IsNullOrWhiteSpace(r.RecipientName)
+				&& string.IsNullOrWhiteSpace(r.RecipientDocument)
+				&& string.IsNullOrWhiteSpace(r.NationalServiceCode)
+				&& string.IsNullOrWhiteSpace(r.ServiceDescription)
+				&& string.IsNullOrWhiteSpace(amountText))
+			{
+				continue;
+			}
+
+			rows.Add(r);
+		}
+
+		return rows;
+	}
+
+	private async Task Import()
+	{
+		Error = string.Empty;
+
+		if (SelectedIssuerId is null)
+		{
+			Error = "Please select an issuer.";
+			return;
+		}
+
+		if (PreviewRows is null || PreviewRows.Count == 0)
+		{
+			Error = "No preview rows to import.";
+			return;
+		}
+
+		IsImporting = true;
+
+		try
+		{
+			var drafts = new List<Nfse.Domain.Entities.InvoiceDraft>();
+
+			foreach (var r in PreviewRows)
+			{
+				if (r.ServiceTemplateId is null)
+					continue;
+
+				try
+				{
+					var draft = new Nfse.Domain.Entities.InvoiceDraft(
+						issuerId: SelectedIssuerId.Value,
+						serviceTemplateId: r.ServiceTemplateId.Value,
+						recipientName: r.RecipientName,
+						recipientDocument: r.RecipientDocument,
+						serviceDescription: r.ServiceDescription,
+						amount: r.Amount ?? 0,
+						taxRate: r.TaxRate,
+						isIssWithheld: r.IsIssWithheld ?? false);
+
+					if (!r.IsValid)
+						draft.MarkError(r.Error);
+
+					drafts.Add(draft);
+				}
+				catch (Exception ex)
+				{
+					// Fallback: create an error if something unexpected happens
+					var fallback = new Nfse.Domain.Entities.InvoiceDraft(
+						issuerId: SelectedIssuerId.Value,
+						serviceTemplateId: r.ServiceTemplateId.Value,
+						recipientName: string.IsNullOrWhiteSpace(r.RecipientName) ? "UNKNOWN" : r.RecipientName,
+						recipientDocument: string.IsNullOrWhiteSpace(r.RecipientDocument) ? "0" : r.RecipientDocument,
+						serviceDescription: string.IsNullOrWhiteSpace(r.ServiceDescription) ? "UNKNOWN" : r.ServiceDescription,
+						amount: Math.Max(r.Amount ?? 0, 1),
+						taxRate: r.TaxRate,
+						isIssWithheld: r.IsIssWithheld ?? false);
+
+					fallback.MarkError(ex.Message);
+					drafts.Add(fallback);
+				}
+			}
+
+			Db.InvoiceDrafts.AddRange(drafts);
+			await Db.SaveChangesAsync();
+
+			// Clear preview after import
+			PreviewRows = null;
+			SelectedFile = null;
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
+		}
+		finally
+		{
+			IsImporting = false;
+		}
+	}
+
+	private void Clear()
+	{
+		Error = string.Empty;
+		PreviewRows = null;
+		SelectedFile = null;
+	}
+
+	private static decimal? TryParseDecimal(string text)
+	{
+		if (string.IsNullOrWhiteSpace(text))
+			return null;
+
+		var cleaned = text.Trim();
+
+		if (decimal.TryParse(cleaned, NumberStyles.Number, new CultureInfo("pt-BR"), out var pt))
+			return pt;
+
+		cleaned = cleaned.Replace(',', '.');
+		if (decimal.TryParse(cleaned, NumberStyles.Number, CultureInfo.InvariantCulture, out var inv))
+			return inv;
+
+		return null;
+	}
+
+	private static bool? TryParseBool(string text)
+	{
+		if (string.IsNullOrWhiteSpace(text))
+			return null;
+
+		var v = text.Trim().ToLowerInvariant();
+
+		return v switch
+		{
+			"1" or "true" or "yes" or "y" or "sim" or "s" => true,
+			"0" or "false" or "no" or "n" or "nao" or "não" => false,
+			_ => null
+		};
+	}
+
+	private sealed class ImportRowPreview
+	{
+		public int RowNumber { get; set; }
+
+		public string RecipientName { get; set; } = "";
+		public string RecipientDocument { get; set; } = "";
+
+		public string NationalServiceCode { get; set; } = "";
+		public string ServiceDescription { get; set; } = "";
+
+		public decimal? Amount { get; set; }
+		public decimal? TaxRate { get; set; }
+		public bool? IsIssWithheld { get; set; }
+
+		public Guid? ServiceTemplateId { get; set; }
+
+		public bool IsValid { get; set; }
+		public string Error { get; set; } = "";
+	}
+}
