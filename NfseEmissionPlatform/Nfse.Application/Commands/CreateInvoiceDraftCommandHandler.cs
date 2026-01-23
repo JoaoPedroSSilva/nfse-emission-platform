@@ -17,6 +17,7 @@ namespace Nfse.Application.Commands
             InvoiceDraft draft = new InvoiceDraft(
                 command.IssuerId,
                 command.ServiceTemplateId,
+                command.NationalServiceCode,
                 command.RecipientName,
                 command.RecipientDocument,
                 command.ServiceDescription,

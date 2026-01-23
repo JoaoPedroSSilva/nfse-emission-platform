@@ -2,7 +2,7 @@
 {
     public enum InvoiceDraftStatus
     {
-        Darft = 0,
+        Draft = 0,
         Ready = 1,
         Error = 2,
         Submitted = 3

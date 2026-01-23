@@ -4,25 +4,50 @@
 @using Microsoft.EntityFrameworkCore
 @using Nfse.Infrastructure.Persistence
 @using Nfse.Web.Helpers
+@using Nfse.Domain.Entities
 
 @inject AppDbContext Db
 
-<h3>InvoiceDrafts</h3>
+<h3>Invoice Drafts</h3>
 
-<div class="mb-3" style="max-width: 920px;">
+<div class="mb-3" style="max-width: 1100px;">
 
-	<div class="mb-3">
-		<label class="form-label">Issuer</label>
-		<select class="form-select" @bind="SelectedIssuerId">
-			<option value="">-- select an issuer --</option>
-			@foreach (var issuer in Issuers)
-			{
-				<option value="@issuer.Id">
-					@issuer.LegalName (@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value))
-				</option>
-			}
-		</select>
+	<div class="row g-2 mb-3">
+		<div class="col-md-6">
+			<label class="form-label">Issuer</label>
+			<select class="form-select" @bind="SelectedIssuerId">
+				<option value="">-- select an issuer --</option>
+				@foreach (var issuer in Issuers)
+				{
+					<option value="@issuer.Id">
+						@issuer.LegalName (@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value))
+					</option>
+				}
+			</select>
+		</div>
+
+		<div class="col-md-3">
+			<label class="form-label">Status</label>
+			<select class="form-select" @bind="SelectedStatus">
+				<option value="">All</option>
+				@foreach (var s in StatusOptions)
+				{
+					<option value="@s">@s</option>
+				}
+			</select>
+		</div>
+
+		<div class="col-md-3 d-flex align-items-end">
+			<button class="btn btn-outline-primary w-100" onclick="Reload" disabled="@IsLoading">
+				@(IsLoading ? "Loading..." : "Reload")
+			</button>
+		</div>
 	</div>
+
+	@if (!string.IsNullOrWhiteSpace(Error))
+	{
+		<div class="alert alert-danger" role="alert">@Error</div>
+	}
 
 	@if (SelectedIssuerId is null)
 	{
@@ -38,16 +63,31 @@
 	}
 	else
 	{
-		<table class="table table-sm">
+		<div class="d-flex justify-content-between align-items-center mb-2">
+			<div>
+				<span>Showing: <b>@Drafts.Count</b></span>
+				<span class="ms-3">Errors: <b>@Drafts.Count(x => x.Status == InvoiceDraftStatus.Error)</b></span>
+			</div>
+
+			<button class="btn btn-warning"
+					@onclick="ReprocessErrors"
+					disabled="@IsReprocessing || Drafts.All(x => x.Status != InvoiceDraftStatus.Error)">
+				@(IsReprocessing ? "Reprocessing..." : "Reprocess errors")
+			</button>
+		</div>
+
+		<table class="table table-sm align-middle">
 			<thead>
 				<tr>
 					<th>Created</th>
 					<th>Status</th>
+					<th>Service</th>
 					<th>Recipient</th>
 					<th>Document</th>
 					<th>Amount</th>
 					<th>Tax rate</th>
 					<th>ISS withheld</th>
+					<th>Error</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -56,11 +96,18 @@
 					<tr>
 						<td>@d.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
 						<td>@d.Status</td>
+						<td>
+							<div>@d.NationalServiceCode</div>
+							<small class="text-muted">@TrimForTable(d.ServiceDescription, 60)</small>
+						</td>
 						<td>@d.RecipientName</td>
 						<td>@DocumentFormatter.FormatCpfOrCnpj(d.RecipientDocument)</td>
-						<td>@d.Amount.ToString("0.00")</td>
+						<td>@d.Amount.ToString("N2")</td>
 						<td>@(d.TaxRate?.ToString("0.####") ?? "-")</td>
 						<td>@(d.IsIssWithheld ? "Yes" : "No")</td>
+						<td style="color:@(d.Status == InvoiceDraftStatus.Error ? "red" : "inherit")">
+							@TrimForTable(d.ErrorMessage, 80)
+						</td>
 					</tr>
 				}
 			</tbody>
@@ -78,11 +125,28 @@
 		set
 		{
 			_selectedIssuerId = value;
-			_ = LoadDrafts();
+			_ = Reload();
 		}
 	}
 
+	private string? _selectedStatus;
+	private string? SelectedStatus
+	{
+		get => _selectedStatus;
+		set
+		{
+			_selectedStatus = value;
+			_ = Reload();
+		}
+	}
+
+	private static readonly string[] StatusOptions = Enum.GetNames(typeof(InvoiceDraftStatus));
+
 	private List<Nfse.Domain.Entities.InvoiceDraft>? Drafts;
+
+	private bool IsLoading = false;
+	private bool IsReprocessing = false;
+	private string Error = string.Empty;
 
 	protected override async Task OnInitializedAsync()
 	{
@@ -92,21 +156,102 @@
 		.ToListAsync();
 	}
 
-	private async Task LoadDrafts()
+	private async Task Reload()
 	{
+		Error = string.Empty;
+
 		if (SelectedIssuerId is null)
 		{
 			Drafts = null;
 			return;
 		}
 
-		Drafts = await Db.InvoiceDrafts
-			.AsNoTracking()
-			.Where(x => x.IssuerId == SelectedIssuerId)
-			.OrderByDescending(x => x.CreatedAtUtc)
-			.Take(200)
-			.ToListAsync();
+		IsLoading = true;
 
-		StateHasChanged();
+		try
+		{
+			var q = Db.InvoiceDrafts
+				.AsNoTracking()
+				.Where(x => x.IssuerId == SelectedIssuerId);
+
+			if (!string.IsNullOrWhiteSpace(SelectedStatus) 
+				&& Enum.TryParse<InvoiceDraftStatus>(SelectedStatus, out var status))
+			{
+				q = q.Where(x => x.Status == status);
+			}
+
+			Drafts = await q
+				.OrderByDescending(x => x.CreatedAtUtc)
+				.Take(500)
+				.ToListAsync();
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
+		}
+		finally
+		{
+			IsLoading = false;
+			StateHasChanged();
+		}
+	}
+
+	private async Task ReprocessErrors()
+	{
+		Error = string.Empty;
+
+		if (SelectedIssuerId is null)
+			return;
+
+		IsReprocessing = true;
+
+		try
+		{
+			var templates = await Db.ServiceTemplates
+				.Where(x => x.IssuerId == SelectedIssuerId && x.IsActive)
+				.ToListAsync();
+
+			var byCode = templates
+				.GroupBy(x => x.NationalServiceCode)
+				.ToDictionary(g => g.Key, global => global.First());
+
+			var errorDrafts = await Db.InvoiceDrafts
+				.Where(x => x.IssuerId == SelectedIssuerId && x.Status == InvoiceDraftStatus.Error)
+				.OrderByDescending(x => x.CreatedAtUtc)
+				.Take(500)
+				.ToListAsync();
+
+			foreach (var d in errorDrafts)
+			{
+				if (d.ServiceTemplateId is null && byCode.TryGetValue(d.NationalServiceCode, out var t))
+				{
+					d.AssignServiceTemplate(t.Id, t.DefaultTaxRate, t.IsIssWithheld);
+				}
+
+				if (d.ServiceTemplateId is not null)
+					d.MarkReady();
+			}
+
+			await Db.SaveChangesAsync();
+
+			await Reload();
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
+		}
+		finally
+		{
+			IsReprocessing = false;
+		}
+	}
+
+	private static string TrimForTable(string? text, int max)
+	{
+		if (string.IsNullOrWhiteSpace(text))
+			return "-";
+
+		var t = text.Trim();
+		return t.Length <= max ? t : t[..max] + "...";
 	}
 }

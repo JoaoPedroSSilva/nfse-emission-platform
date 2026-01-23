@@ -5,7 +5,8 @@ namespace Nfse.Domain.Entities
     public class InvoiceDraft : Entity
     {
         public Guid IssuerId { get; private set; }
-        public Guid ServiceTemplateId { get; private set; }
+        public Guid? ServiceTemplateId { get; private set; }
+        public string NationalServiceCode { get; private set; }
 
         // Recipient (Tomador) - MVP: store as plain strings
         public string RecipientName { get; private set; }
@@ -28,7 +29,8 @@ namespace Nfse.Domain.Entities
 
         public InvoiceDraft(
             Guid issuerId,
-            Guid serviceTemplateId,
+            Guid? serviceTemplateId,
+            string nationalServiceCode,
             string recipientName,
             string recipientDocument,
             string serviceDescription,
@@ -37,7 +39,8 @@ namespace Nfse.Domain.Entities
             bool isIssWithheld)
         {
             if (issuerId == Guid.Empty) throw new ArgumentException("IssuerId is required.");
-            if (serviceTemplateId == Guid.Empty) throw new ArgumentException("ServiceTemplateId is required.");
+            if (string.IsNullOrWhiteSpace(nationalServiceCode) || nationalServiceCode.Trim().Length != 6)
+                throw new ArgumentException("NationalServiceCode must have 6 digits.");
             if (string.IsNullOrWhiteSpace(recipientName)) throw new ArgumentException("Recipient name is required.");
             if (string.IsNullOrWhiteSpace(recipientDocument)) throw new ArgumentException("Recipient document is required.");
             if (string.IsNullOrWhiteSpace(serviceDescription)) throw new ArgumentException("Service description is required.");
@@ -45,6 +48,7 @@ namespace Nfse.Domain.Entities
 
             IssuerId = issuerId;
             ServiceTemplateId = serviceTemplateId;
+            NationalServiceCode = nationalServiceCode.Trim();
 
             RecipientName = recipientName.Trim();
             RecipientDocument = recipientDocument.Trim();
@@ -54,7 +58,7 @@ namespace Nfse.Domain.Entities
             TaxRate = taxRate;
             IsIssWithheld = isIssWithheld;
 
-            Status = InvoiceDraftStatus.Darft;
+            Status = InvoiceDraftStatus.Draft;
             CreatedAtUtc = DateTime.UtcNow;
         }
 
@@ -75,6 +79,17 @@ namespace Nfse.Domain.Entities
             Status = InvoiceDraftStatus.Submitted;
             SubmittedAtUtc = DateTime.UtcNow;
             ErrorMessage = null;
+        }
+
+        public void AssignServiceTemplate(Guid serviceTemplateId, decimal? defaultTaxRate, bool defaultIsIssWithheld)
+        {
+            if (serviceTemplateId == Guid.Empty)
+                throw new ArgumentException("ServiceTemplateId is required.");
+
+            ServiceTemplateId = serviceTemplateId;
+
+            TaxRate ??= defaultTaxRate;
+            IsIssWithheld = IsIssWithheld || defaultIsIssWithheld;
         }
     }
 }

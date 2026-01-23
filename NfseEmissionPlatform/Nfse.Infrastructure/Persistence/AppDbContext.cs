@@ -58,7 +58,8 @@ namespace Nfse.Infrastructure.Persistence
                 b.HasKey(x => x.Id);
 
                 b.Property(x => x.IssuerId).IsRequired();
-                b.Property(x => x.ServiceTemplateId).IsRequired();
+                b.Property(x => x.ServiceTemplateId);
+                b.Property(x => x.NationalServiceCode).HasMaxLength(6).IsRequired();
 
                 b.Property(x => x.RecipientName).HasMaxLength(200).IsRequired();
                 b.Property(x => x.RecipientDocument).HasMaxLength(14).IsRequired();
@@ -74,7 +75,7 @@ namespace Nfse.Infrastructure.Persistence
                 b.Property(x => x.CreatedAtUtc).IsRequired();
                 b.Property(x => x.SubmittedAtUtc);
 
-                b.HasIndex(x => new { x.IssuerId, x.Status });
+                b.HasIndex(x => new { x.IssuerId, x.NationalServiceCode , x.Status });
             });
         }
     }

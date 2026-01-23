@@ -2,7 +2,8 @@
 {
     public record CreateInvoiceDraftCommand(
         Guid IssuerId,
-        Guid ServiceTemplateId,
+        Guid? ServiceTemplateId,
+        string NationalServiceCode,
         string RecipientName,
         string RecipientDocument,
         string ServiceDescription,

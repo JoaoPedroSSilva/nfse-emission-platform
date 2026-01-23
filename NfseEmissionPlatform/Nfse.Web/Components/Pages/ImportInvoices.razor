@@ -64,7 +64,6 @@
 					<th>Amount</th>
 					<th>TaxRate</th>
 					<th>ISS withheld</th>
-					<th>ServiceTemplate</th>
 					<th>Errors</th>
 				</tr>
 			</thead>
@@ -80,7 +79,6 @@
 						<td>@(r.Amount?.ToString("0.00") ?? "-")</td>
 						<td>@(r.TaxRate?.ToString("0.####") ?? "-")</td>
 						<td>@(r.IsIssWithheld?.ToString() ?? "-")</td>
-						<td>@(r.ServiceTemplateId?.ToString() ?? "-")</td>
 						<td style="color:@(r.IsValid ? "inherit" : "red")">@r.Error</td>
 					</tr>
 				}
@@ -280,14 +278,12 @@
 
 			foreach (var r in PreviewRows)
 			{
-				if (r.ServiceTemplateId is null)
-					continue;
-
 				try
 				{
 					var draft = new Nfse.Domain.Entities.InvoiceDraft(
 						issuerId: SelectedIssuerId.Value,
-						serviceTemplateId: r.ServiceTemplateId.Value,
+						serviceTemplateId: r.ServiceTemplateId,
+						nationalServiceCode: r.NationalServiceCode,
 						recipientName: r.RecipientName,
 						recipientDocument: r.RecipientDocument,
 						serviceDescription: r.ServiceDescription,
@@ -305,7 +301,8 @@
 					// Fallback: create an error if something unexpected happens
 					var fallback = new Nfse.Domain.Entities.InvoiceDraft(
 						issuerId: SelectedIssuerId.Value,
-						serviceTemplateId: r.ServiceTemplateId.Value,
+						serviceTemplateId: r.ServiceTemplateId,
+						nationalServiceCode: r.NationalServiceCode,
 						recipientName: string.IsNullOrWhiteSpace(r.RecipientName) ? "UNKNOWN" : r.RecipientName,
 						recipientDocument: string.IsNullOrWhiteSpace(r.RecipientDocument) ? "0" : r.RecipientDocument,
 						serviceDescription: string.IsNullOrWhiteSpace(r.ServiceDescription) ? "UNKNOWN" : r.ServiceDescription,
