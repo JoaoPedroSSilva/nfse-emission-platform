@@ -143,10 +143,26 @@ namespace Nfse.Application.Services
 
         private static XElement BuildTrib(DpsBuildModel m)
         {
-            return new XElement(Ns + "trib",
-                BuildTribMun(m),
-                // BuildTribFed(m),
-                BuildTotTrib(m)
+            XElement trib = new XElement(Ns + "trib",
+                BuildTribMun(m)
+            );
+
+            XElement tribFed = BuildTribFed(m);
+            if (tribFed is not null)
+                trib.Add(tribFed);
+
+            trib.Add(BuildTotTrib(m));
+
+            return trib;
+        }
+
+        private static XElement BuildTribFed(DpsBuildModel m)
+        {
+            if (!m.IrrfWithheldAmount.HasValue)
+                return null;
+
+            return new XElement(Ns + "tribFed",
+                new XElement(Ns + "vRetIRRF", FormatDec15V2(m.IrrfWithheldAmount.Value))
             );
         }
 
