@@ -33,7 +33,7 @@ namespace Nfse.Gateway.Workers
             while (!stoppingToken.IsCancellationRequested)
             {
                 EmissionJob job = await _queue.DequeueAsync(stoppingToken);
-                _logger.LogInformation("Processing job {JobId} with {Count} drafts", job.JobId, job.DraftsId.Count);
+                _logger.LogInformation("Processing job {JobId} with {Count} drafts", job.JobId, job.DraftIds.Count);
 
                 _jobStore.MarkRunning(job.JobId);
 
