@@ -134,9 +134,11 @@ namespace Nfse.Application.Services
 
         private static XElement BuildVServPrest(DpsBuildModel m)
         {
-            return new XElement(Ns + "vServPrest",
-                new XElement(Ns + "vServ", FormatDecimal(m.ServiceAmount))
+            XElement vServPrest = new XElement(Ns + "vServPrest",
+                new XElement(Ns + "vServ", FormatDec15V2(m.ServiceAmount))
             );
+
+            return vServPrest;
         }
 
         private static XElement BuildTrib(DpsBuildModel m)
@@ -152,8 +154,11 @@ namespace Nfse.Application.Services
             return u.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
         }
 
-        private static string FormatDecimal(decimal value)
-            => value.ToString("0.00", CultureInfo.InvariantCulture);
+        private static string FormatDec15V2(decimal value)
+        {
+            if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
+            return value.ToString("0.00", CultureInfo.InvariantCulture);
+        }
 
         private static string OnlyDigits(string s)
             => new string((s ?? "").Where(char.IsDigit).ToArray());
