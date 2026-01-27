@@ -144,7 +144,40 @@ namespace Nfse.Application.Services
         private static XElement BuildTrib(DpsBuildModel m)
         {
             return new XElement(Ns + "trib",
-                new XElement(Ns + "TODO", "0")
+                BuildTribMun(m),
+                // BuildTribFed(m),
+                BuildTotTrib(m)
+            );
+        }
+
+        private static XElement BuildTribMun(DpsBuildModel m)
+        {
+            XElement tribMun = new XElement(Ns + "tribMun",
+                new XElement(Ns + "tribISSQN", m.IssTaxationCode),
+                new XElement(Ns + "tpRetISSQN", m.IssWithholdingType)
+            );
+
+            if (m.IssRatePercent.HasValue)
+                tribMun.Add(new XElement(Ns + "pAliq", FormatDec1V2(m.IssRatePercent.Value)));
+
+            return tribMun;
+        }
+
+        private static string FormatDec1V2(decimal value)
+        {
+            if (value < 0m || value > 9.99m)
+                throw new ArgumentOutOfRangeException(nameof(value));
+
+            if (value == 0m)
+                return "0";
+
+            return value.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
+        private static XElement BuildTotTrib(DpsBuildModel m)
+        {
+            return new XElement(Ns + "totTrib",
+                new XElement(Ns + "indTotTrib", "0")
             );
         }
 

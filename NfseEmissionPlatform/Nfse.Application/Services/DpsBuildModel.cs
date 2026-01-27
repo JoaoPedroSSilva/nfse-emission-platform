@@ -33,8 +33,13 @@
         string? NbsCode,
         string? ContributorInternalCode,
 
-
         // Values (valores)
-        decimal ServiceAmount          // vServPrest 
+        decimal ServiceAmount,         // vServPrest 
+
+        // Trib
+        string IssTaxationCode,     // tribISSQN: "1","2","3","4"
+        string IssWithholdingType,  // tpRetISSQN: "1","2","3"
+        decimal? IssRatePercent    // pAliq (optional) e.g. 2.00, 5.00
+
     );
 }
