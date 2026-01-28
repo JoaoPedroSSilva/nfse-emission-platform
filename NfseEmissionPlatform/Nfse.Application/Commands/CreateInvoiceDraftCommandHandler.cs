@@ -23,6 +23,7 @@ namespace Nfse.Application.Commands
                 command.ServiceDescription,
                 command.Amount,
                 command.TaxRate,
+                command.IrrfWithheldAmount,
                 command.IsIssWithheld);
 
             await _repo.AddAsync(draft, cancellationToken);

@@ -64,6 +64,7 @@
 					<th>Amount</th>
 					<th>TaxRate</th>
 					<th>ISS withheld</th>
+					<th>IRRF</th>
 					<th>Errors</th>
 				</tr>
 			</thead>
@@ -79,6 +80,7 @@
 						<td>@(r.Amount?.ToString("0.00") ?? "-")</td>
 						<td>@(r.TaxRate?.ToString("0.####") ?? "-")</td>
 						<td>@(r.IsIssWithheld?.ToString() ?? "-")</td>
+						<td>@(r.IrrfWithheldAmount?.ToString("0.00") ?? "-")</td>
 						<td style="color:@(r.IsValid ? "inherit" : "red")">@r.Error</td>
 					</tr>
 				}
@@ -179,6 +181,7 @@
 
 		int? colTaxRate = headers.TryGetValue("TaxRate", out var tr) ? tr : null;
 		int? colIssWithheld = headers.TryGetValue("IsIssWithheld", out var iw) ? iw : null;
+		int? colIrrf = headers.TryGetValue("IRRF", out var irrf) ? irrf : null;
 
 		var rows = new List<ImportRowPreview>();
 
@@ -198,6 +201,7 @@
 			var amountText = row.Cell(headers["Amount"]).GetString().Trim();
 			r.Amount = TryParseDecimal(amountText);
 
+			r.IrrfWithheldAmount = colIrrf is null ? null : TryParseDecimal(row.Cell(colIrrf.Value).GetString().Trim());
 			r.TaxRate = colTaxRate is null ? null : TryParseDecimal(row.Cell(colTaxRate.Value).GetString().Trim());
 			r.IsIssWithheld = colIssWithheld is null ? null : TryParseBool(row.Cell(colIssWithheld.Value).GetString().Trim());
 
@@ -221,6 +225,9 @@
 
 			if (r.Amount is null || r.Amount <= 0)
 				errors.Add("Amount must be greater than zero.");
+
+			if (r.IrrfWithheldAmount is not null && r.IrrfWithheldAmount < 0)
+				errors.Add("IRRF must be >= 0.");
 
 			if (!templateByCode.TryGetValue(r.NationalServiceCode, out var template))
 			{
@@ -289,6 +296,7 @@
 						serviceDescription: r.ServiceDescription,
 						amount: r.Amount ?? 0,
 						taxRate: r.TaxRate,
+						irrfWithheldAmount: r.IrrfWithheldAmount,
 						isIssWithheld: r.IsIssWithheld ?? false);
 
 					if (!r.IsValid)
@@ -308,6 +316,7 @@
 						serviceDescription: string.IsNullOrWhiteSpace(r.ServiceDescription) ? "UNKNOWN" : r.ServiceDescription,
 						amount: Math.Max(r.Amount ?? 0, 1),
 						taxRate: r.TaxRate,
+						irrfWithheldAmount: r.IrrfWithheldAmount,
 						isIssWithheld: r.IsIssWithheld ?? false);
 
 					fallback.MarkError(ex.Message);
@@ -382,6 +391,7 @@
 		public string ServiceDescription { get; set; } = "";
 
 		public decimal? Amount { get; set; }
+		public decimal? IrrfWithheldAmount { get; set; }
 		public decimal? TaxRate { get; set; }
 		public bool? IsIssWithheld { get; set; }
 

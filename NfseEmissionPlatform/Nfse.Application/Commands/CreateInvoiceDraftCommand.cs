@@ -9,5 +9,6 @@
         string ServiceDescription,
         decimal Amount,
         decimal? TaxRate,
+        decimal? IrrfWithheldAmount,
         bool IsIssWithheld);
 }

@@ -10,7 +10,7 @@ namespace Nfse.Application.Services
 
         public string Build(DpsBuildModel m)
         {
-            var dps = new XElement(Ns + "DPS",
+            XElement dps = new XElement(Ns + "DPS",
                 new XAttribute(XNamespace.Xmlns + "ds", Ds),
                 new XAttribute("versao", m.LayoutVersion),
                 new XElement(Ns + "infDPS",

@@ -16,6 +16,7 @@ namespace Nfse.Domain.Entities
         public string ServiceDescription { get; private set; }
         public decimal Amount { get; private set; }
         public decimal? TaxRate { get; private set; }
+        public decimal? IrrfWithheldAmount { get; private set; }
         public bool IsIssWithheld { get; private set; }
 
         // Control
@@ -36,6 +37,7 @@ namespace Nfse.Domain.Entities
             string serviceDescription,
             decimal amount,
             decimal? taxRate,
+            decimal? irrfWithheldAmount,
             bool isIssWithheld)
         {
             if (issuerId == Guid.Empty) throw new ArgumentException("IssuerId is required.");
@@ -56,6 +58,7 @@ namespace Nfse.Domain.Entities
 
             Amount = amount;
             TaxRate = taxRate;
+            IrrfWithheldAmount = irrfWithheldAmount;
             IsIssWithheld = isIssWithheld;
 
             Status = InvoiceDraftStatus.Draft;

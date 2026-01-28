@@ -67,6 +67,7 @@ namespace Nfse.Infrastructure.Persistence
 
                 b.Property(x => x.Amount).HasPrecision(18, 2).IsRequired();
                 b.Property(x => x.TaxRate).HasPrecision(9, 4);
+                b.Property(x => x.IrrfWithheldAmount).HasPrecision(15, 2);
                 b.Property(x => x.IsIssWithheld).IsRequired();
 
                 b.Property(x => x.Status).IsRequired();
