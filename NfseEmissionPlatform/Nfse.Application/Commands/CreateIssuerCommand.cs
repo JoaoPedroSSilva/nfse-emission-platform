@@ -4,5 +4,10 @@
         Guid TenantId,
         string Cnpj,
         string LegalName,
-        string TradeName);
+        string? TradeName,
+        string IbgeCityCode7,
+        string? MunicipalRegistration,
+        int SimplesNationalOption,
+        int? SimplesNationalRegime,
+        int SpecialTaxRegime);
 }

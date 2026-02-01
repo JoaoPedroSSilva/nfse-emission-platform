@@ -11,7 +11,7 @@
         string DpsNumber,              // 1..15 digits, no leading zero unless padded explicitly
         DateTime ServiceDate,          // competence date (yyyyMMdd)
         string EmitterTypeCode,        // "1" (provider)
-        string IssuerIbgeCityCode7,    // cLocEmi (7-digit IBGE)
+        string? IssuerIbgeCityCode7,    // cLocEmi (7-digit IBGE)
 
         // Provider (prest)
         string ProviderCnpj,           // 14 digits
@@ -26,7 +26,7 @@
         string? RecipientEmail,
 
         // Service (serv)
-        string ServiceIbgeCityCode7,   // locPrest (usually same as cLocEmi)
+        string? ServiceIbgeCityCode7,   // locPrest (usually same as cLocEmi)
         string NationalServiceCode,    // code from ServiceTemplate (6 digits)
         string ServiceDescription,     // free text 
         string? MunicipalTaxCode,

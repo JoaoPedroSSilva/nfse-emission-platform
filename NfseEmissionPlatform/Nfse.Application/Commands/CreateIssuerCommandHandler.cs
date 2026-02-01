@@ -21,7 +21,12 @@ namespace Nfse.Application.Commands
                 command.TenantId,
                 cnpj,
                 command.LegalName,
-                command.TradeName);
+                command.TradeName,
+                command.IbgeCityCode7,
+                command.MunicipalRegistration,
+                command.SimplesNationalOption,
+                command.SimplesNationalRegime,
+                command.SpecialTaxRegime);
 
             await _issuerRepository.AddAsync(issuer, cancellationToken);
 

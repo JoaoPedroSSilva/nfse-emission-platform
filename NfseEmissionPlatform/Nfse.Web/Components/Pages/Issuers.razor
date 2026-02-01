@@ -26,6 +26,38 @@
 		<input class="form-control" @bind="Form.TradeName" />
 	</div>
 
+	<div class="mb-2">
+		<label class="form-label">IBGE city code</label><br />
+		<input class="form-control" @bind="Form.IbgeCityCode7" maxlength="7" inputmode="numeric" />
+	</div>
+
+	<div class="mb-2">
+		<label class="form-label">Municipal registration</label><br />
+		<input class="form-control" @bind="Form.MunicipalRegistration" inputmode="numeric" />
+	</div>
+
+	<div class="mb-2">
+		<label class="form-label">Simples National Option (1,2,3)</label><br />
+		<InputNumber class="form-control" @bind-Value="Form.SimplesNationalOption" />
+	</div>
+
+	@if (Form.SimplesNationalOption == 3)
+	{
+		<div class="mb-2">
+			<label class="form-label">Simples National Regime (1,2,3) - optional</label><br />
+			<InputNumber class="form-control" @bind-Value="Form.SimplesNationalRegime" />
+		</div>
+	}
+	else
+	{
+		Form.SimplesNationalRegime = null;
+	}
+
+	<div class="mb-2">
+		<label class="form-label">Special Tax Regime  (0..9)</label><br />
+		<InputNumber class="form-control" @bind-Value="Form.SpecialTaxRegime" />
+	</div>
+
 	<button class="btn btn-primary" @onclick="Create" disabled="@IsSaving">
 		@(IsSaving ? "Saving..." : "Create issuer")
 	</button>
@@ -55,6 +87,10 @@ else
 			<tr>
 				<th>Legal name</th>
 				<th>CNPJ</th>
+				<th>IBGE</th>
+				<th>IM</th>
+				<th>SN</th>
+				<th>STR</th>
 				<th>Active</th>
 			</tr>
 		</thead>
@@ -64,6 +100,10 @@ else
 				<tr>
 					<td>@issuer.LegalName</td>
 					<td>@DocumentFormatter.FormatCpfOrCnpj(issuer.Cnpj.Value)</td>
+					<td>@issuer.IbgeCityCode7</td>
+					<td>@issuer.MunicipalRegistration</td>
+					<td>@issuer.SimplesNationalOption</td>
+					<td>@issuer.SpecialTaxRegime</td>
 					<td>@(issuer.IsActive ? "Yes" : "No")</td>
 				</tr>
 			}
@@ -79,7 +119,6 @@ else
 
 	private bool IsSaving = false;
 	private string Error = string.Empty;
-	private int ClickCount = 0;
 
 	protected override async Task OnInitializedAsync()
 	{
@@ -96,6 +135,44 @@ else
 			return;
 		}
 
+		if (Form.SimplesNationalOption is < 1 or > 3)
+		{
+			Error = "Simples National Option must be 1, 2 or 3.";
+			return;
+		}
+
+		if (Form.SimplesNationalRegime is not null && (Form.SimplesNationalRegime < 1 || Form.SimplesNationalRegime > 3))
+		{
+			Error = "Simples National Regime must be 1, 2 or 3 when provided.";
+			return;
+		}
+
+		if (Form.SimplesNationalOption != 3)
+		{
+			Form.SimplesNationalRegime = null;
+		}
+
+		if (Form.SpecialTaxRegime is < 0 or > 9)
+		{
+			Error = "Special Tax Regime must be between 0 and 9.";
+			return;
+		}
+
+		Form.Cnpj = new string((Form.Cnpj ?? "").Where(char.IsDigit).ToArray());
+		if (Form.Cnpj.Length != 14)
+		{
+			Error = "CNPJ must have 14 digits.";
+			return;
+		}
+
+		string ibgeDigits = new string((Form.IbgeCityCode7 ?? "").Where(char.IsDigit).ToArray());
+		if (ibgeDigits.Length != 7)
+		{
+			Error = "IBGE city code must have exactly 7 digits.";
+			return;
+		}
+		Form.IbgeCityCode7 = ibgeDigits;
+
 		IsSaving = true;
 
 		try
@@ -104,7 +181,13 @@ else
 				TenantId: DemoTenantId,
 				Cnpj: Form.Cnpj,
 				LegalName: Form.LegalName,
-				TradeName: Form.TradeName);
+				TradeName: Form.TradeName,
+				IbgeCityCode7: Form.IbgeCityCode7,
+				MunicipalRegistration: Form.MunicipalRegistration,
+				SimplesNationalOption: Form.SimplesNationalOption,
+				SimplesNationalRegime: Form.SimplesNationalRegime,
+				SpecialTaxRegime: Form.SpecialTaxRegime
+			);
 
 			await CreateIssuer.Handle(command, CancellationToken.None);
 
@@ -134,5 +217,12 @@ else
 		public string Cnpj { get; set; } = "";
 		public string LegalName { get; set; } = "";
 		public string TradeName { get; set; } = "";
+
+		public string IbgeCityCode7 { get; set; } = "";
+		public string? MunicipalRegistration { get; set; }
+
+		public int SimplesNationalOption { get; set; } = 1;
+		public int? SimplesNationalRegime { get; set; }
+		public int SpecialTaxRegime { get; set; } = 0;
 	}
 }

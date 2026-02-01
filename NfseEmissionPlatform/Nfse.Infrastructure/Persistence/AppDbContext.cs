@@ -33,6 +33,13 @@ namespace Nfse.Infrastructure.Persistence
 
                 b.Property(x => x.LegalName).HasMaxLength(200).IsRequired();
                 b.Property(x => x.TradeName).HasMaxLength(200);
+                b.Property(x => x.IbgeCityCode7).HasMaxLength(7).IsRequired(false);
+                b.Property(x => x.MunicipalRegistration).HasMaxLength(15);
+
+                b.Property(x => x.SimplesNationalOption);
+                b.Property(x => x.SimplesNationalRegime);
+                b.Property(x => x.SpecialTaxRegime);
+
                 b.Property(x => x.IsActive).IsRequired();
             });
 
