@@ -156,7 +156,7 @@ namespace Nfse.Application.Services
             return trib;
         }
 
-        private static XElement BuildTribFed(DpsBuildModel m)
+        private static XElement? BuildTribFed(DpsBuildModel m)
         {
             if (!m.IrrfWithheldAmount.HasValue)
                 return null;

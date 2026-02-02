@@ -4,7 +4,8 @@
     {
         Draft = 0,
         Ready = 1,
-        Error = 2,
-        Submitted = 3
+        Queued = 2,
+        Error = 3,
+        Submitted = 4
     }
 }

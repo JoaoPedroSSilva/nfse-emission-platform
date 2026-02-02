@@ -9,6 +9,7 @@ namespace Nfse.Infrastructure.Persistence
         public DbSet<Issuer> Issuers => Set<Issuer>();
         public DbSet<ServiceTemplate> ServiceTemplates => Set<ServiceTemplate>();
         public DbSet<InvoiceDraft> InvoiceDrafts => Set<InvoiceDraft>();
+        public DbSet<IssuerSequence> IssuerSequences => Set<IssuerSequence>();
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -84,6 +85,13 @@ namespace Nfse.Infrastructure.Persistence
                 b.Property(x => x.SubmittedAtUtc);
 
                 b.HasIndex(x => new { x.IssuerId, x.NationalServiceCode , x.Status });
+            });
+
+            modelBuilder.Entity<IssuerSequence>(b =>
+            {
+                b.ToTable("IssuerSequences");
+                b.HasKey(x => x.IssuerId);
+                b.Property(x => x.NextDpsNumber).IsRequired();
             });
         }
     }

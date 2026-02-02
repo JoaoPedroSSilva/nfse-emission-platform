@@ -2,8 +2,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nfse.Application.Interfaces;
+using Nfse.Application.Services;
 using Nfse.Infrastructure.Persistence;
 using Nfse.Infrastructure.Repositories;
+using Nfse.Infrastructure.Services;
 
 namespace Nfse.Infrastructure
 {
@@ -16,6 +18,7 @@ namespace Nfse.Infrastructure
             services.AddScoped<IIssuerRepository, EfIssuerRepository>();
             services.AddScoped<IServiceTemplateRepository, EfServiceTemplateRepository>();
             services.AddScoped<IInvoiceDraftRepository, EfInvoiceDraftRepository>();
+            services.AddScoped<IDpsNumberAllocator, EfDpsNumberAllocator>();
 
             return services;
         }
