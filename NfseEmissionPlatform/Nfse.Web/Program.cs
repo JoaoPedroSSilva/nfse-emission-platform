@@ -5,7 +5,9 @@ using Nfse.Web.Components;
 using Nfse.Web.Components.Account;
 using Nfse.Web.Data;
 using Nfse.Infrastructure;
+using Nfse.Infrastructure.Services;
 using Nfse.Application.Commands;
+using Nfse.Application.Services;
 
 namespace Nfse.Web
 {
@@ -25,6 +27,9 @@ namespace Nfse.Web
             builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
             builder.Services.AddScoped<CreateInvoiceDraftCommandHandler>();
 
+            builder.Services.AddScoped<DpsXmlBuilder>();
+            builder.Services.AddScoped<DpsBuildModelFactory>();
+
             builder.Services.AddAuthentication(options =>
                 {
                     options.DefaultScheme = IdentityConstants.ApplicationScheme;
@@ -32,7 +37,7 @@ namespace Nfse.Web
                 })
                 .AddIdentityCookies();
 
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+            string connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();

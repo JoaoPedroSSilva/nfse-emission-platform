@@ -5,6 +5,10 @@
 @using Nfse.Infrastructure.Persistence
 @using Nfse.Web.Helpers
 @using Nfse.Domain.Entities
+@using Nfse.Application.Services
+
+@inject DpsBuildModelFactory DpsFactory
+@inject DpsXmlBuilder DpsBuilder
 
 @inject AppDbContext Db
 
@@ -38,7 +42,7 @@
 		</div>
 
 		<div class="col-md-3 d-flex align-items-end">
-			<button class="btn btn-outline-primary w-100" onclick="Reload" disabled="@IsLoading">
+			<button class="btn btn-outline-primary w-100" @onclick="Reload" disabled="@IsLoading">
 				@(IsLoading ? "Loading..." : "Reload")
 			</button>
 		</div>
@@ -88,6 +92,7 @@
 					<th>Tax rate</th>
 					<th>ISS withheld</th>
 					<th>Error</th>
+					<th>Actions</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -108,10 +113,25 @@
 						<td style="color:@(d.Status == InvoiceDraftStatus.Error ? "red" : "inherit")">
 							@TrimForTable(d.ErrorMessage, 80)
 						</td>
+						<td>
+							<button class="btn btn-sm btn-outline-secondary"
+								@onclick="() => PreviewDps(d.Id)"
+								disabled="@(d.Status != InvoiceDraftStatus.Ready)">
+								Preview DPS
+							</button>
+						</td>
 					</tr>
 				}
 			</tbody>
 		</table>
+
+		@if (!string.IsNullOrWhiteSpace(DpsPreviewXml))
+		{
+			<div class="mt-3">
+				<h5>DPS XML Preview</h5>
+				<pre style="max-height: 420px; overflow:auto;" class="border p-2">@DpsPreviewXml</pre>
+			</div>
+		}
 	}
 </div>
 
@@ -128,6 +148,8 @@
 			_ = Reload();
 		}
 	}
+
+	private string? DpsPreviewXml;
 
 	private string? _selectedStatus;
 	private string? SelectedStatus
@@ -243,6 +265,43 @@
 		finally
 		{
 			IsReprocessing = false;
+		}
+	}
+
+	private async Task PreviewDps(Guid draftId)
+	{
+		Error = string.Empty;
+		DpsPreviewXml = null;
+
+		try
+		{
+			var draft = await Db.InvoiceDrafts.FirstOrDefaultAsync(x => x.Id == draftId);
+
+			if (draft is null)
+			{
+				Error = "Only READY drafts can generate DPS preview.";
+				return;
+			}
+
+			var issuer = await Db.Issuers.FirstOrDefaultAsync(x => x.Id == draft.IssuerId);
+
+			if (issuer is null)
+			{
+				Error = "Issuer not found for this draft.";
+				return;
+			}
+
+			var model = await DpsFactory.CreateAsync(
+				draft: draft,
+				issuer: issuer,
+				appVersion: "NfseEmissionPlatform/0.1",
+				ct: CancellationToken.None);
+
+			DpsPreviewXml = DpsBuilder.Build(model);
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
 		}
 	}
 

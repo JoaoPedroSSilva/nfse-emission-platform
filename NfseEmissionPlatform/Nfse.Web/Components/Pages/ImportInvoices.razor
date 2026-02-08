@@ -299,7 +299,9 @@
 						irrfWithheldAmount: r.IrrfWithheldAmount,
 						isIssWithheld: r.IsIssWithheld ?? false);
 
-					if (!r.IsValid)
+					if (r.IsValid)
+						draft.MarkReady();
+					else
 						draft.MarkError(r.Error);
 
 					drafts.Add(draft);

@@ -17,8 +17,10 @@ namespace Nfse.Infrastructure
 
             services.AddScoped<IIssuerRepository, EfIssuerRepository>();
             services.AddScoped<IServiceTemplateRepository, EfServiceTemplateRepository>();
+
             services.AddScoped<IInvoiceDraftRepository, EfInvoiceDraftRepository>();
             services.AddScoped<IDpsNumberAllocator, EfDpsNumberAllocator>();
+            services.AddScoped<DpsBuildModelFactory>();
 
             return services;
         }

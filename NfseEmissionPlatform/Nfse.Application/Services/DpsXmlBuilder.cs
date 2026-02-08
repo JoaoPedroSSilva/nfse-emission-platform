@@ -53,14 +53,15 @@ namespace Nfse.Application.Services
         private static XElement BuildRegTrib(DpsBuildModel m)
         {
             XElement regTrib = new XElement(Ns + "regTrib",
-                new XElement(Ns + "opSimpNac", m.SimplesNationalOption),
-                new XElement(Ns + "regEspTrib", m.SpecialTaxRegime)
+                new XElement(Ns + "opSimpNac", m.SimplesNationalOption)
             );
 
             if (m.SimplesNationalOption == 3 && m.SimplesNationalRegime.HasValue)
             {
                 regTrib.Add(new XElement(Ns + "regApTribSN", m.SimplesNationalRegime.Value));
             }
+
+            regTrib.Add(new XElement(Ns + "regEspTrib", m.SpecialTaxRegime));
 
             return regTrib;
         }
