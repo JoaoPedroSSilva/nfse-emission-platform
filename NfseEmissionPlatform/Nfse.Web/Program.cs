@@ -53,6 +53,13 @@ namespace Nfse.Web
             builder.Services.AddScoped<CreateIssuerCommandHandler>();
             builder.Services.AddScoped<CreateServiceTemplateCommandHandler>();
 
+            builder.Services.AddHttpClient<NfseGatewayClient>((sp, http) =>
+            {
+                IConfiguration cfg = sp.GetRequiredService<IConfiguration>();
+                http.BaseAddress = new Uri(cfg["Gateway:BaseUrl"]!);
+                http.Timeout = TimeSpan.FromSeconds(120);
+            });
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
