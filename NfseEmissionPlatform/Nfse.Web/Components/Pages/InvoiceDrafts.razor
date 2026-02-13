@@ -6,6 +6,8 @@
 @using Nfse.Web.Helpers
 @using Nfse.Domain.Entities
 @using Nfse.Application.Services
+@inject NfseGatewayClient Gateway
+@inject DpsBuildModelFactory DpsFactory
 
 @inject DpsBuildModelFactory DpsFactory
 @inject DpsXmlBuilder DpsBuilder
@@ -72,6 +74,11 @@
 				<span>Showing: <b>@Drafts.Count</b></span>
 				<span class="ms-3">Errors: <b>@Drafts.Count(x => x.Status == InvoiceDraftStatus.Error)</b></span>
 			</div>
+			<button class="btn btn-success ms-2"
+				@onclick="EmitAllReady"
+				disabled="@IsEmitting || Drafts.All(x => x.Status != InvoiceDraftStatus.Ready)">
+			@(IsEmitting ? "Emitting..." : "Emit all Ready")
+			</button>
 
 			<button class="btn btn-warning"
 					@onclick="ReprocessErrors"
@@ -168,6 +175,7 @@
 
 	private bool IsLoading = false;
 	private bool IsReprocessing = false;
+	private bool IsEmitting = false;
 	private string Error = string.Empty;
 
 	protected override async Task OnInitializedAsync()
@@ -302,6 +310,101 @@
 		catch (Exception ex)
 		{
 			Error = ex.Message;
+		}
+	}
+
+	private async Task EmitAllReady()
+	{
+		Error = string.Empty;
+
+		if (SelectedIssuerId is null)
+			return;
+
+		IsEmitting = true;
+
+		try
+		{
+			var issuer = await Db.Issuers
+				.FirstOrDefaultAsync(x => x.Id == SelectedIssuerId.Value);
+
+			if (issuer is null)
+			{
+				Error = "Issuer not found.";
+				return;
+			}
+
+			var readyDrafts = await Db.InvoiceDrafts
+				.Where(x => x.IssuerId == SelectedIssuerId.Value
+					&& x.Status == InvoiceDraftStatus.Ready)
+				.OrderBy(x => x.CreatedAtUtc)
+				.Take(500)
+				.ToListAsync();
+
+			if (readyDrafts.Count == 0)
+			{
+				Error = "No Ready drafts to emit.";
+				return;
+			}
+
+			var xmls = new List<(InvoiceDraft Draft, string Xml)>();
+
+			foreach (var d in readyDrafts)
+			{
+				try
+				{
+					var model = await DpsFactory.CreateAsync(d, issuer, appVersion: "NfseEmissionPlatform/0.1", CancellationToken.None);
+					var builder = new DpsXmlBuilder();
+					var xml = builder.Build(model);
+
+					xmls.Add((d, xml));
+				}
+				catch (Exception ex)
+				{
+					d.MarkError($"DPS build error: {ex.Message}");
+				}
+			}
+
+			await Db.SaveChangesAsync();
+
+			var validXmls = xmls.Where(x => x.Draft.Status == InvoiceDraftStatus.Ready).ToList();
+			if (validXmls.Count == 0)
+			{
+				Error = "All Ready drafts failed to build XML.";
+				await Reload();
+				return;
+			}
+
+			const int batchSize = 20;
+
+			foreach (var batch in validXmls.Chunk(batchSize))
+			{
+				var batchXml = batch.Select(x => x.Xml).ToList();
+
+				try
+				{
+					var responseText = await Gateway.SubmitAsync(batchXml);
+
+					foreach (var item in batch)
+						item.Draft.MarkSubmitted();
+				}
+				catch (Exception ex)
+				{
+					foreach (var item in batch)
+						item.Draft.MarkError($"Gateway submit error: {ex.Message}");
+				}
+
+				await Db.SaveChangesAsync();
+			}
+
+			await Reload();
+		}
+		catch (Exception ex)
+		{
+			Error = ex.Message;
+		}
+		finally
+		{
+			IsEmitting = false;
 		}
 	}
 
